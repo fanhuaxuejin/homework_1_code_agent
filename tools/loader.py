@@ -10,14 +10,7 @@ def load_all() -> None:
         return
 
     # 以下导入的副作用就是"把自己注册进工具表"
-    from tools import (
-        list_dir,
-        list_symbols,
-        read_code,
-        run_python,
-        search_code,
-        write_report,
-    )
+    from tools import read_code
 
     _LOADED = True
 

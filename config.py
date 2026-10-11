@@ -38,7 +38,6 @@ class Settings:
     max_retries:int
     thinking:bool
     dotenv_loaded:bool
-    run_python_timeout: int = 10
 
     @property
     def has_api_key(self)->bool:
@@ -80,7 +79,6 @@ def load_settings(workspace:str|None=None)->Settings:
         max_retries=_env_int("LLM_MAX_RETRIES", 4),
         thinking=_env_bool("LLM_THINKING", provider.supports_thinking),
         dotenv_loaded=True,
-        run_python_timeout=_env_int("RUN_PYTHON_TIMEOUT", 10),
     )
 
 def describe(s: Settings) -> str:
