@@ -6,7 +6,11 @@ from openai import OpenAI
 from config import Settings
 
 import json
+import random
+import time
 
+class LLMError(RuntimeError):
+    """LLM 调用最终失败。"""
 @dataclass
 class ToolCallRequest:
     """模型请求调用某个工具。"""
@@ -50,13 +54,67 @@ class LLMClient:
         self.prompt_tokens = 0
         self.completion_tokens = 0
 
+    @staticmethod
+    def _is_retryable(exc: Exception) -> bool:
+        """区分"值得重试"和"重试也没用"的错误。
+
+        值得重试：限流(429)、服务端错误(5xx)、网络超时/连接中断
+        不值得：401 鉴权失败、400 参数错误、404 模型不存在、402 余额不足
+        """
+        status = getattr(exc, "status_code", None)
+        if status is None:
+            response = getattr(exc, "response", None)
+            status = getattr(response, "status_code", None)
+
+        if status is not None:
+            if status == 429 or 500 <= int(status) < 600:
+                return True
+            if 400 <= int(status) < 500:
+                return False
+
+        # 网络类异常按类型名判断，避免强依赖 openai 的异常层级
+        name = type(exc).__name__
+        if name in {
+            "APITimeoutError", "APIConnectionError",
+            "ConnectTimeout", "ReadTimeout",
+            "TimeoutError", "ConnectionError",
+        }:
+            return True
+        return True
+
     def chat(
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         *,
         temperature: float = 0.2,
+        on_retry:Any=None,
     ) -> ModelReply:
+        last_error: Exception | None = None
+
+        for attempt in range(1, self.settings.max_retries + 1):
+            try:
+                return self._request_once(messages, tools, temperature)
+            except Exception as exc:
+                last_error = exc
+                if not self._is_retryable(exc) or attempt == self.settings.max_retries:
+                    break
+                delay = min(2 ** (attempt - 1), 8) + random.uniform(0, 0.6)
+                if on_retry is not None:
+                    on_retry(attempt, self.settings.max_retries, exc, delay)
+                time.sleep(delay)
+
+        raise LLMError(
+            f"LLM 调用失败（已尝试 {self.settings.max_retries} 次）："
+            f"{type(last_error).__name__}: {last_error}"
+        ) from last_error
+
+    def _request_once(
+            self,
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]] | None,
+            temperature: float,
+    )->ModelReply:
         kwargs: dict[str, Any] = {
             "model": self.settings.model,
             "messages": messages,

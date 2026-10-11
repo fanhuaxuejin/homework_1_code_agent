@@ -4,6 +4,4 @@
 
 openai>=1.40.0          # OpenAI 兼容协议客户端，DeepSeek 直接复用
 python-dotenv>=1.0.0    # 从 .env 读取 API Key，避免硬编码
-
-# 阶段 11 会用到（提前装好，免得中途打断节奏）
 pytest>=8.0.0
