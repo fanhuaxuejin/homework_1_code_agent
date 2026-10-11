@@ -11,7 +11,6 @@ from agent.prompts import build_system_prompt
 from config import Settings
 from tools import invoke as invoke_tool
 from tools.loader import schemas as load_tool_schemas
-from agent.memory import ConversationMemory
 
 # 单次提问内最多允许多少轮"推理+工具调用"
 DEFAULT_MAX_STEPS = 12
@@ -49,34 +48,26 @@ class CodeExplainAgent:
         self.on_event = on_event or (lambda _event: None)
         self.client = LLMClient(settings)
         self.tools = load_tool_schemas()
-        store_dir = settings.workspace / ".agent_memory"
-        self.memory = ConversationMemory(
-            build_system_prompt(settings.workspace),
-            store_dir=store_dir,
-        )
+        self.messages: list[dict[str, Any]] = [
+            {"role": "system", "content": build_system_prompt(settings.workspace)}
+        ]
 
     # ------------------------------------------------------------- 对外接口
     def ask(self, question: str) -> AgentResult:
         """提一个问题，跑完整个 Agent 循环，返回结果。"""
         started = time.time()
-        self.memory.add_user(question)
+        self.messages.append({"role": "user", "content": question})
         invocations: list[dict[str, Any]] = []
 
         try:
             for step in range(1, self.max_steps + 1):
-                if self.memory.trim():
-                    self._emit(
-                        "info",
-                        text=f"上下文超出预算，已裁剪较早的对话（第 {self.memory.trim_events} 次）",
-                    )
-
                 self._emit("step", step=step, max_steps=self.max_steps, text="正在推理…")
 
-                reply = self.client.chat(self.memory.messages, self.tools)
+                reply = self.client.chat(self.messages, self.tools)
 
                 # ---- 分支 A：模型要调工具
                 if reply.wants_tools:
-                    self.memory.add(reply.assistant_message)
+                    self.messages.append(reply.assistant_message)
 
                     # 有时候模型会同时给出"我要调工具"+一句说明
                     if reply.content.strip():
@@ -95,7 +86,7 @@ class CodeExplainAgent:
                         "[提示] 模型返回了空内容。可能是问题过于笼统，"
                         "请补充具体文件路径或函数名后重试。"
                     )
-                self.memory.add({"role": "assistant", "content": answer})
+                self.messages.append({"role": "assistant", "content": answer})
                 self._emit("final", text=answer)
                 return AgentResult(
                     answer=answer,
@@ -110,7 +101,7 @@ class CodeExplainAgent:
                 "可能原因：问题需要的信息超出工作目录范围，或目标文件不存在。\n"
                 "建议：把问题范围缩小到具体文件/函数，或检查路径是否正确。"
             )
-            self.memory.add({"role": "assistant", "content": fallback})
+            self.messages.append({"role": "assistant", "content": fallback})
             self._emit("final", text=fallback)
             return AgentResult(
                 answer=fallback,
@@ -143,10 +134,14 @@ class CodeExplainAgent:
 
     def clear(self) -> None:
         """清空对话记忆"""
-        self.memory.clear()
+        self.messages = [m for m in self.messages if m.get("role") == "system"]
+        if not self.messages:
+            self.messages = [
+                {"role": "system", "content": build_system_prompt(self.settings.workspace)}
+            ]
 
     def usage_text(self) -> str:
-        return self.memory.summary()
+        return f"{self.client.usage_text()} | 消息数 {len(self.messages)}"
 
     # -------------------------------------------------------------- 内部
     def _execute_tool_call(self, call) -> dict[str, Any]:
@@ -159,7 +154,11 @@ class CodeExplainAgent:
         result = invoke_tool(call.name, call.arguments)
         self._emit("tool_result", name=call.name, text=result)
 
-        self.memory.add_tool_result(call.id, result)
+        self.messages.append({
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": result,
+        })
         return {"name": call.name, "arguments": call.arguments, "result": result}
 
     def _emit(self, event_type: str, **payload: Any) -> None:
