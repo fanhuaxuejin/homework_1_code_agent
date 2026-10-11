@@ -1,0 +1,9 @@
+# 依赖清单。
+# 刻意保持极简：真正的 Agent 循环由你自己实现，不引入 LangChain 等框架。
+# 这样 Design.md 里才能讲清"我理解的架构"，而不是"框架的架构"。
+
+openai>=1.40.0          # OpenAI 兼容协议客户端，DeepSeek 直接复用
+python-dotenv>=1.0.0    # 从 .env 读取 API Key，避免硬编码
+
+# 阶段 11 会用到（提前装好，免得中途打断节奏）
+pytest>=8.0.0

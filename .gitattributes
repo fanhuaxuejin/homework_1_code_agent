@@ -1,0 +1,29 @@
+# 统一行尾规范，避免 Windows/Linux 协作时出现"整个文件都变了"的伪差异。
+
+* text=auto eol=lf
+
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.js    text eol=lf
+*.ts    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.cpp   text eol=lf
+*.c     text eol=lf
+*.h     text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.pdf   binary
+*.zip   binary
+
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+.env*   text eol=lf

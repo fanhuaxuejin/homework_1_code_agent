@@ -1,0 +1,29 @@
+# ============================================================
+# 密钥与敏感信息 —— 绝对不能提交
+# 这一行是你学"环境变量管理"的第一个实践：先写它，再写别的
+# ============================================================
+.env
+
+# Python
+__pycache__/
+.deps/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Agent 运行时产物
+reports/
+.agent_memory/
+.agent_tmp/
+*.log
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
