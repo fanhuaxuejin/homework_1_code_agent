@@ -155,9 +155,15 @@ class CodeExplainAgent:
             模型调用 read_code(path="utils.py") → [错误] 文件不存在
             模型看到错误 → 改用 list_dir(".") → 重新读取成功
         """
-        self._emit("tool_call", name=call.name, arguments=call.arguments)
-        result = invoke_tool(call.name, call.arguments)
-        self._emit("tool_result", name=call.name, text=result)
+        if call.parse_error:
+            result = (
+                f"[错误] {call.parse_error}\n"
+                f"请重新调用 {call.name}，并确保参数是合法的 JSON 对象。"
+            )
+            self._emit("tool_error", name=call.name, text=result)
+        else:
+            self._emit("tool_call", name=call.name, arguments=call.arguments)
+            result = invoke_tool(call.name, call.arguments)
 
         self.memory.add_tool_result(call.id, result)
         return {"name": call.name, "arguments": call.arguments, "result": result}
